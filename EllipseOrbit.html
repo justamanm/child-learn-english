@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>精确地球轨道模拟</title>
+  <style>
+    /* CSS 样式 */
+    /* 添加一个容器来作为定位上下文和轨道显示区域 */
+    .solar-system-container {
+         position: relative; /* *** 关键：设置为包含块 *** */
+         width: 600px; /* 容器宽度，根据需要调整 */
+         height: 600px; /* 容器高度，根据需要调整 */
+         border: 1px solid grey; /* 方便看容器边界 */
+         overflow: hidden; /* 隐藏超出容器范围的内容 */
+         /* 可选：将容器本身在页面上居中 */
+         margin: 50px auto;
+         background-color: #000; /* 黑色背景模拟太空 */
+    }
+
+    .sun {
+      width: 100px; /* 太阳的尺寸 */
+      height: 100px;
+      background-color: yellow; /* 太阳的颜色 */
+      border-radius: 50%; /* 使其成为圆形 */
+      position: absolute; /* 相对于 .solar-system-container 定位 */
+      top: 50%; /* 定位到容器垂直中心的 50% */
+      left: 50%; /* 定位到容器水平中心的 50% */
+      /* 使用 transform 将元素自身的中心对齐到 left/top 指定的点 */
+      transform: translate(-50%, -50%);
+      z-index: 1; /* 确保太阳在行星后面或前面，根据需要调整 */
+    }
+
+    .planet-earth {
+      width: 10px; /* 地球的尺寸 */
+      height: 10px;
+      background-color: blue; /* 地球的颜色 */
+      border-radius: 50%; /* 使其成为圆形 */
+      position: absolute; /* 相对于 .solar-system-container 定位 */
+      /* 初始的 left/top 50% 可以保留，但 JS 会动态覆盖它们 */
+      top: 50%;
+      left: 50%;
+      /* *** 关键：使用 transform 将元素自身的中心对齐到 JS 计算出的 (left, top) 点 *** */
+      transform: translate(-50%, -50%);
+      z-index: 2; /* 确保地球显示在太阳或轨道前面 */
+    }
+
+    /* 如果需要显示轨道路径 (可选) */
+    .orbit-path {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: calc(var(--orbit-width) * 1px);  /* JS 会动态设置这个 CSS 变量 */
+        height: calc(var(--orbit-height) * 1px); /* JS 会动态设置这个 CSS 变量 */
+        border: 1px dashed rgba(255, 255, 255, 0.3); /* 虚线轨道 */
+        border-radius: 50%; /* 椭圆轨道框 */
+        box-sizing: border-box; /* 边框包含在尺寸内 */
+        pointer-events: none; /* 不阻挡鼠标事件 */
+        z-index: 0; /* 确保在最底层 */
+    }
+
+
+  </style>
+</head>
+<body>
+  <div class="solar-system-container">
+      <div class="sun"></div>
+      <div class="planet-earth"></div>
+      </div>
+      <div class="orbit-path"></div>
+
+  <style>
+    /* CSS 样式 */
+    body {
+        margin: 0; /* 移除默认 body 外边距 */
+        display: flex; /* 使用 flexbox 居中容器 */
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh; /* 使 body 至少占满视口高度 */
+        background-color: #1a1a2e; /* 深色背景 */
+    }
+
+    /* 添加一个容器 div，用于放置太阳和行星，并作为它们的定位上下文 */
+    .solar-system-container {
+         position: relative; /* *** 关键：设置为包含块 *** */
+         width: 600px; /* 容器宽度，根据你的比例和 AU 像素值调整 */
+         height: 600px; /* 容器高度 */
+         /* border: 1px solid grey; /* 方便看容器边界 */
+         overflow: hidden; /* 隐藏超出容器范围的内容 */
+         /* 如果 body 已经居中容器，这里不需要 margin: auto */
+         /* margin: auto; */
+         background-color: transparent; /* 容器背景透明，显示 body 背景 */
+    }
+
+    .sun {
+      width: 100px; /* 太阳的尺寸 */
+      height: 100px;
+      /* 使用径向渐变模拟太阳光芒 */
+      background: radial-gradient(circle at 50% 50%, #FFEB3B, #FFC107, #FF5722);
+      border-radius: 50%; /* 使其成为圆形 */
+      position: absolute; /* 相对于 .solar-system-container 定位 */
+      top: 50%; /* 定位到容器垂直中心的 50% */
+      left: 50%; /* 定位到容器水平中心的 50% */
+      /* 使用 transform 将元素自身的中心对齐到 left/top 指定的点 */
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 50px rgba(255, 160, 0, 0.6); /* 外部光晕 */
+      z-index: 1; /* 确保太阳在轨道下方，行星上方 */
+    }
+
+    .planet-earth {
+      width: 10px; /* 地球的尺寸 */
+      height: 10px;
+      background-color: #4DB6AC; /* 地球的颜色 */
+      border-radius: 50%; /* 使其成为圆形 */
+      position: absolute; /* 相对于 .solar-system-container 定位 */
+      /* 初始的 left/top 50% 可以保留，但 JS 会动态覆盖它们 */
+      top: 50%;
+      left: 50%;
+      /* *** 关键：使用 transform 将元素自身的中心对齐到 JS 计算出的 (left, top) 点 *** */
+      transform: translate(-50%, -50%);
+      z-index: 2; /* 确保地球在太阳和轨道上方 */
+    }
+
+     /* 如果需要显示轨道路径 (可选) */
+     /* 请在 HTML 中取消 orbit-path div 的注释 */
+    .orbit-path {
+        position: absolute;
+        top: 50%; /* 轨道框的中心在容器的中心 */
+        left: 50%; /* 轨道框的中心在容器的中心 */
+        /* 尺寸会由 JS 计算并设置 --orbit-width 和 --orbit-height CSS 变量 */
+        width: var(--orbit-width, 0);
+        height: var(--orbit-height, 0);
+        border: 1px dashed rgba(255, 255, 255, 0.3); /* 虚线轨道 */
+        border-radius: 50%; /* 椭圆形状的边框 */
+        box-sizing: border-box; /* 边框包含在尺寸内 */
+        pointer-events: none; /* 不阻挡鼠标事件 */
+        z-index: 0; /* 确保在最底层 */
+        transform: translate(-50%, -50%); /* 将元素自身的中心对齐到 left/top 指定的点 */
+    }
+
+  </style>
+
+  <script>
+    /*
+    地球轨道的偏心率 (eccentricity) e 非常小，只有大约 0.0167。
+    偏心率是用来描述椭圆形状“扁平”程度的参数：
+      当 e = 0 时，轨道是一个完美的圆形。
+      当 e 接近 1 时，轨道非常扁长。
+      地球轨道的偏心率 0.0167 非常接近 0，这意味着地球的轨道是一个非常接近圆形的椭圆。从视觉上看，它与一个完美的圆形几乎无法区分，太阳也只稍微偏离中心一点点
+    
+      将 e 值修改得大一些（例如 0.5 或 0.8）后运行代码，您就会看到一个非常明显的椭圆轨道了。
+    重要提示： 验证完后，请务必将 e 的值改回地球真实的偏心率 0.0167，以便模拟真实的地球轨道。
+
+    轨道是否接近圆形，可以用偏心率 (eccentricity, e) 来衡量。e=0 是一个完美的圆形，偏心率越大，椭圆就越扁长。
+    以下是八大行星的近似偏心率：
+      金星 (Venus): e≈0.0068 (非常接近圆)
+      海王星 (Neptune): e≈0.0086 (非常接近圆)
+      地球 (Earth): e≈0.0167 (非常接近圆)
+      天王星 (Uranus): e≈0.0472 (比较接近圆)
+      木星 (Jupiter): e≈0.0484 (比较接近圆)
+      土星 (Saturn): e≈0.0542 (比较接近圆)
+      火星 (Mars): e≈0.0934 (相对不那么圆)
+      水星 (Mercury): e≈0.2056 (明显是椭圆)
+
+    */
+
+    // --- 地球轨道参数 (近似值) ---
+    const a_AU = 1; // 半长轴 (AU)
+    const e = 0.0167; // 偏心率
+    const omega_deg = 286.5; // 近日点幅角 (度)
+    const omega_rad = omega_deg * Math.PI / 180; // 近日点幅角 (弧度)
+
+    const orbital_period_days = 365.25; // 公转周期 (天)
+    const mean_motion_rad_per_day = (2 * Math.PI) / orbital_period_days; // 平均角速度 (弧度/天)
+
+    // --- 动画速度参数 ---
+    const total_real_ms_per_orbit = 30000; // 公转一周的现实时间 (毫秒)
+    const ms_per_sim_day = total_real_ms_per_orbit / orbital_period_days; // 模拟 1 天 = 现实 ms
+
+    // --- 视觉比例尺 ---
+    const pixels_per_AU = 150; // 1 AU = 像素数
+
+    // --- 动画状态变量 ---
+    let currentMeanAnomaly = 0; // 当前平近点角 (弧度)
+    let lastAnimationFrameTime = null; // 上一次动画帧时间戳
+
+    // --- 开普勒方程求解器 ---
+    function solveKeplersEquation(M, e, tolerance = 1e-6, maxIterations = 10) {
+        let E = M;
+        for (let i = 0; i < maxIterations; i++) {
+            const deltaE = (M - E + e * Math.sin(E)) / (1 - e * Math.cos(E));
+            E += deltaE;
+            if (Math.abs(deltaE) < tolerance) {
+                return E;
+            }
+        }
+        console.warn("开普勒方程求解器未在给定迭代次数内收敛");
+        return E;
+    }
+
+    // --- 计算轨道位置 ---
+    function calculateOrbitalPosition(M, a, e, omega_rad) {
+        const E = solveKeplersEquation(M, e);
+        const nu_rad = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
+        const r_AU = a * (1 - e * Math.cos(E));
+        const angle_from_ref = nu_rad + omega_rad;
+        const x_AU = r_AU * Math.cos(angle_from_ref);
+        const y_AU = r_AU * Math.sin(angle_from_ref);
+        return { x_AU, y_AU };
+    }
+
+    // --- 动画循环 ---
+    let animationFrameId = null;
+
+    function animateOrbit(timestamp) {
+        if (!lastAnimationFrameTime) {
+            lastAnimationFrameTime = timestamp;
+        }
+
+        const elapsedRealMs = timestamp - lastAnimationFrameTime;
+        lastAnimationFrameTime = timestamp;
+
+        const elapsedSimDays = elapsedRealMs / ms_per_sim_day;
+        currentMeanAnomaly += mean_motion_rad_per_day * elapsedSimDays;
+        currentMeanAnomaly %= (2 * Math.PI);
+        if (currentMeanAnomaly < 0) {
+            currentMeanAnomaly += (2 * Math.PI);
+        }
+
+        // --- 计算地球的当前位置 (像素) ---
+        const position_AU = calculateOrbitalPosition(
+            currentMeanAnomaly,
+            a_AU,
+            e,
+            omega_rad
+        );
+        const x_pixels = position_AU.x_AU * pixels_per_AU;
+        const y_pixels = position_AU.y_AU * pixels_per_AU;
+
+        // --- 更新页面元素位置 ---
+        const sunElement = document.querySelector('.sun');
+        const earthElement = document.querySelector('.planet-earth');
+        const orbitPathElement = document.querySelector('.orbit-path'); // 如果需要轨道路径
+
+        if (sunElement && earthElement) {
+            // 更新地球元素的 left 和 top 样式，相对于容器中心 (50% 50%) 进行偏移
+            // 确保 .planet-earth 在 CSS 中有 position: absolute; 和 transform: translate(-50%, -50%);
+            earthElement.style.left = `calc(50% + ${x_pixels}px)`;
+            earthElement.style.top = `calc(50% + ${y_pixels}px)`;
+
+             // --- 可选：更新轨道路径的尺寸和位置 ---
+             // 如果你需要显示轨道，它是一个覆盖整个椭圆的框
+             // 这个框的宽度是 2*a，高度是 2*b = 2*a*sqrt(1-e^2)
+             // 这个框的中心与太阳中心 (容器中心) 重合
+             const orbitWidth_pixels = 2 * a_AU * pixels_per_AU;
+             const orbitHeight_pixels = 2 * a_AU * Math.sqrt(1 - e * e) * pixels_per_AU; // b = a * sqrt(1-e^2)
+
+             if (orbitPathElement) {
+                 // 直接设置 CSS 变量，让 CSS 规则应用尺寸
+                 orbitPathElement.style.setProperty('--orbit-width', `${orbitWidth_pixels}px`);
+                 orbitPathElement.style.setProperty('--orbit-height', `${orbitHeight_pixels}px`);
+                 // 确保 CSS 中 .orbit-path 有 position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+             }
+
+
+         } else {
+             console.error("未找到表示太阳或地球的 DOM 元素！停止动画。");
+             lastAnimationFrameTime = null;
+             cancelAnimationFrame(animationFrameId);
+             animationFrameId = null;
+             return;
+         }
+
+        // 请求下一动画帧
+        animationFrameId = requestAnimationFrame(animateOrbit);
+    }
+
+    // --- 启动动画 ---
+    // *** 使用 DOMContentLoaded 确保 DOM 元素加载完毕后再启动 ***
+    function startOrbitalAnimation() {
+        document.addEventListener('DOMContentLoaded', () => {
+            // 检查元素是否存在
+            const sunElement = document.querySelector('.sun');
+            const earthElement = document.querySelector('.planet-earth');
+            if (!sunElement || !earthElement) {
+                 console.error("启动动画失败：未找到太阳或地球元素。");
+                 return; // 元素不存在则不启动
+            }
+
+            lastAnimationFrameTime = null;
+            console.log("启动精确轨道动画...");
+            animationFrameId = requestAnimationFrame(animateOrbit);
+        });
+    }
+
+    // --- 停止动画 (可选) ---
+    function stopOrbitalAnimation() {
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            console.log("轨道动画已停止。");
+        }
+        lastAnimationFrameTime = null;
+    }
+
+    // *** 调用启动函数 ***
+    startOrbitalAnimation(); // 在脚本加载后，设置等待 DOMContentLoaded 事件
+  </script>
+</body>
+</html>

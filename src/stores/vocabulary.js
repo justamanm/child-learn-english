@@ -9,7 +9,8 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
       description: '学习关于太空、行星和探索宇宙的词汇。',
       icon: '🚀',
       difficulty: 2,
-      wordCount: 10
+      wordCount: 10,
+      planetId: 'mercury'
     },
     {
       id: 'science-lab',
@@ -17,7 +18,8 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
       description: '探索与科学实验和实验室设备相关的词汇。',
       icon: '🔬',
       difficulty: 3,
-      wordCount: 10
+      wordCount: 10,
+      planetId: 'venus'
     },
     {
       id: 'technology',
@@ -25,7 +27,8 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
       description: '学习关于计算机、设备和技术的基本词汇。',
       icon: '💻',
       difficulty: 1,
-      wordCount: 10
+      wordCount: 10,
+      planetId: 'earth'
     },
     {
       id: 'mathematics',
@@ -33,7 +36,8 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
       description: '掌握重要的数学词汇，提升你的问题解决能力。',
       icon: '🧮',
       difficulty: 3,
-      wordCount: 10
+      wordCount: 10,
+      planetId: 'mars'
     },
     {
       id: 'robotics',
@@ -41,7 +45,8 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
       description: '学习关于机器人、人工智能和自动化的词汇。',
       icon: '🤖',
       difficulty: 4,
-      wordCount: 10
+      wordCount: 10,
+      planetId: 'jupiter'
     }
   ])
 

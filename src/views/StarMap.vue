@@ -10,6 +10,7 @@ import venusImg from '../assets/imgs/venus.avif'
 import earthImg from '../assets/imgs/earth.webp'
 import marsImg from '../assets/imgs/mars.webp'
 import jupiterImg from '../assets/imgs/jupiter.webp'
+import moonImg from '../assets/imgs/moon.webp'
 
 const router = useRouter()
 const vocabStore = useVocabularyStore()
@@ -29,6 +30,12 @@ const startY = ref(0)
 const scrollLeft = ref(0)
 const scrollTop = ref(0)
 const sun = ref()
+
+// 控制旋转的函数
+let animationFrameId = null;
+
+// 添加每个行星原始图标的引用
+const originalIcons = {};
 
 // 添加调试面板显示状态控制
 const showDebugPanel = ref(false);
@@ -77,7 +84,7 @@ const scale = ref(1) // 缩放比例
 const minScale = computed(() => useRealProportions.value ? 0.3 : 0.5) // 最小缩放比例
 const maxScale = computed(() => useRealProportions.value ? 1.5 : 1.5) // 最大缩放比例
 
-
+// ------------------------------ 行星信息 ------------------------------
 // 卫星映射，每个行星对应的卫星列表
 const satelliteMapping = {
   'earth': ['moon'],
@@ -85,21 +92,27 @@ const satelliteMapping = {
   'jupiter': ['io', 'europa']
 }
 
-// 修改行星信息部分，添加base字段和卫星信息
-const planetInfo = {
-  'sun': {
+const sunInfo = {
     name: '太阳',
     color: '#FFC107',
-    base: null,  // 太阳没有基准天体，是整个系统的中心
-    orbitRatioReal: 0,   // 太阳的基础大小
+    sizeRatioAlmost: 4,
     sizeRatioReal: 4,
-  },
+}
+
+// 修改行星信息部分，添加base字段和卫星信息
+const planetInfo = {
   'mercury': {
     name: '水星',
     color: '#FFB74D',
     base: 'sun',  // 围绕太阳运动
-    orbitRatioReal: 0.39,  // 距离太阳的相对距离（天文单位）
+    orbitRatioReal: 0.45,  // 距离太阳的相对距离（天文单位）
     sizeRatioReal: 0.38,  // 相对于地球的尺寸比例
+    orbitRatioAlmost: 0.45,
+    sizeRatioAlmost: 0.38,
+    orbitSpeed: 0.24,
+    rotationSpeed: 0.017,
+    img: "https://img.timex.fun/blot-english/mercury-pamolal.png",
+    img_local: mercuryImg
   },
   'venus': {
     name: '金星',
@@ -107,6 +120,12 @@ const planetInfo = {
     base: 'sun',
     orbitRatioReal: 0.72,
     sizeRatioReal: 0.95,
+    orbitRatioAlmost: 0.72,
+    sizeRatioAlmost: 0.95,
+    orbitSpeed: 0.62,
+    rotationSpeed: -0.004,  // 这家伙反着转
+    img: "https://img.timex.fun/blot-english/venus-pala6m3.jpg",
+    img_local: venusImg
   },
   'earth': {
     name: '地球',
@@ -114,6 +133,12 @@ const planetInfo = {
     base: 'sun',
     orbitRatioReal: 1.0,  // 地球距离太阳1个天文单位，作为基准
     sizeRatioReal: 1.0,   // 地球大小作为基准
+    orbitRatioAlmost: 1.0,
+    sizeRatioAlmost: 1.0,
+    orbitSpeed: 1,
+    rotationSpeed: 1,
+    img: "https://img.timex.fun/blot-english/earth-pamolpz.jpg",
+    img_local: earthImg
   },
   'moon': {
     name: '月球',
@@ -121,222 +146,162 @@ const planetInfo = {
     base: 'earth',  // 围绕地球运动
     orbitRatioReal: 0.00257,  // 月球到地球的距离约为地球到太阳距离的0.00257倍
     sizeRatioReal: 0.273,  // 月球大小约为地球的0.273倍
+    orbitRatioAlmost: 0.00257,
+    sizeRatioAlmost: 0.273,
+    orbitSpeed: 13.37,
+    rotationSpeed: 13.37,  // 月球公转和自转速度相同，好神奇
+    img: "https://img.timex.fun/blot-english/moon-pamol65.png",
+    img_local: moonImg
   },
   'mars': {
     name: '火星',
     color: '#E57373',
     base: 'sun',
-    orbitRatioReal: 1.52,
+    orbitRatioReal: 1.62,
     sizeRatioReal: 0.53,
+    orbitRatioAlmost: 1.62,
+    sizeRatioAlmost: 0.53,
+    orbitSpeed: 0.53,
+    rotationSpeed: 0.97,
+    img: "https://img.timex.fun/blot-english/mars-pamolg4.png",
+    img_local: marsImg
   },
-  'phobos': {
-    name: '火卫一',
-    color: '#BDBDBD',
-    base: 'mars',
-    orbitRatioReal: 0.00016,  // 火卫一距离火星非常近
-    sizeRatioReal: 0.005,  // 火卫一非常小
-  },
-  'deimos': {
-    name: '火卫二',
-    color: '#9E9E9E',
-    base: 'mars',
-    orbitRatioReal: 0.00041,  // 火卫二距离火星稍远
-    sizeRatioReal: 0.003,  // 火卫二更小
-  },
+  // 'phobos': {
+  //   name: '火卫一',
+  //   color: '#BDBDBD',
+  //   base: 'mars',
+  //   orbitRatioReal: 0.00016,  // 火卫一距离火星非常近
+  //   sizeRatioReal: 0.005,  // 火卫一非常小
+  //   orbitRatioAlmost: 0.00016,
+  //   sizeRatioAlmost: 0.005,
+  // },
+  // 'deimos': {
+  //   name: '火卫二',
+  //   color: '#9E9E9E',
+  //   base: 'mars',
+  //   orbitRatioReal: 0.00041,  // 火卫二距离火星稍远
+  //   sizeRatioReal: 0.003,  // 火卫二更小
+  //   orbitRatioAlmost: 0.00041,
+  //   sizeRatioAlmost: 0.003,
+  // },
   'jupiter': {
     name: '木星',
     color: '#F06292',
     base: 'sun',
     orbitRatioReal: 5.2,
-    sizeRatioReal: 11.2,
+    sizeRatioReal: 10.96,
+    orbitRatioAlmost: 5.2,
+    sizeRatioAlmost: 10.96,
+    orbitSpeed: 0.084,
+    rotationSpeed: 2.44,
+    img: "https://img.timex.fun/blot-english/jupiter-pamol65.png",
+    img_local: jupiterImg
   },
-  'europa': {
-    name: '木卫二',
-    color: '#F5F5F5',
-    base: 'jupiter',
-    orbitRatioReal: 0.0048,  // 相对于地日距离
-    sizeRatioReal: 0.245,  // 相对于地球大小
-  },
-  'io': {
-    name: '木卫一',
-    color: '#FFEB3B',
-    base: 'jupiter',
-    orbitRatioReal: 0.0028,  // 相对于地日距离
-    sizeRatioReal: 0.286,  // 相对于地球大小
-  },
-  'saturn': {
-    name: '土星',
-    color: '#FF9800',
-    base: 'sun',
-    orbitRatioReal: 9.58,
-    sizeRatioReal: 9.45,
-  },
-  'titan': {
-    name: '土卫六',
-    color: '#FF9800',
-    base: 'saturn',
-    orbitRatioReal: 0.0001,  // 相对于地日距离
-    sizeRatioReal: 0.286,  // 相对于地球大小
-  },
-  'uranus': {
-    name: '天王星',
-    color: '#FF9800',
-    base: 'sun',
-    orbitRatioReal: 19.22,
-    sizeRatioReal: 4,
-  },
-  'neptune': {
-    name: '海王星',
-    color: '#FF9800',
-    base: 'sun',
-    orbitRatioReal: 30.07,
-    sizeRatioReal: 4,
-  },
-  
+  // 'io': {
+  //   name: '木卫一',
+  //   color: '#FFEB3B',
+  //   base: 'jupiter',
+  //   orbitRatioReal: 0.0028,  // 相对于地日距离
+  //   sizeRatioReal: 0.286,  // 相对于地球大小
+  //   orbitRatioAlmost: 0.0028,
+  //   sizeRatioAlmost: 0.286,
+  // },
+  // 'europa': {
+  //   name: '木卫二',
+  //   color: '#F5F5F5',
+  //   base: 'jupiter',
+  //   orbitRatioReal: 0.0048,  // 相对于地日距离
+  //   sizeRatioReal: 0.245,  // 相对于地球大小
+  //   orbitRatioAlmost: 0.0048,
+  //   sizeRatioAlmost: 0.245,
+  // },
+  // 'saturn': {
+  //   name: '土星',
+  //   color: '#FF9800',
+  //   base: 'sun',
+  //   orbitRatioReal: 9.58,
+  //   sizeRatioReal: 10.96,
+  //   orbitRatioAlmost: 9.58,
+  //   sizeRatioAlmost: 10.96,
+  //   orbitSpeed: 0.034,
+  //   rotationSpeed: 2.27,
+  // },
+  // 'titan': {
+  //   name: '土卫六',
+  //   color: '#FF9800',
+  //   base: 'saturn',
+  //   orbitRatioReal: 0.0001,  // 相对于地日距离
+  //   sizeRatioReal: 0.286,  // 相对于地球大小
+  //   orbitRatioAlmost: 0.0001,
+  //   sizeRatioAlmost: 0.286,
+  // },
+  // 'uranus': {
+  //   name: '天王星',
+  //   color: '#FF9800',
+  //   base: 'sun',
+  //   orbitRatioReal: 19.22,
+  //   sizeRatioReal: 4,
+  //   orbitRatioAlmost: 19.22,
+  //   sizeRatioAlmost: 4,
+  //   orbitSpeed: 0.01,
+  //   rotationSpeed: 1.39,
+  // },
+  // 'neptune': {
+  //   name: '海王星',
+  //   color: '#FF9800',
+  //   base: 'sun',
+  //   orbitRatioReal: 30.07,
+  //   sizeRatioReal: 4,
+  //   orbitRatioAlmost: 30.07,
+  //   sizeRatioAlmost: 4,
+  //   orbitSpeed: 0.01,
+  //   rotationSpeed: 1.49,
+  // },
 }
 
-const earthBaseSizeReal = ref(285);
-const earthBaseSizeAlmost = ref(250);
-const earthBaseSize = computed(() => {
-  return useRealProportions.value ? earthBaseSizeReal.value : earthBaseSizeAlmost.value;
+// ------------------------------ 大小 ------------------------------
+const earthBaseRadiusReal = ref(100);
+const earthBaseRadiusAlmost = ref(100);
+const earthBaseRadius = computed(() => {
+  return useRealProportions.value ? earthBaseRadiusReal.value : earthBaseRadiusAlmost.value;
 })
 
-const sunSize = ref({
-  width: sunBaseSize.value,
-  height: sunBaseSize.value
+const earthBaseOrbitReal = ref(200);
+const earthBaseOrbitAlmost = ref(200);
+const earthBaseOrbit = computed(() => {
+  return useRealProportions.value ? earthBaseOrbitReal.value : earthBaseOrbitAlmost.value;
 })
 
-// 按照真实太阳系的大致比例设置轨道半径，各行星距离太阳的距离：
-// 水星(0.39 AU) : 金星(0.72 AU) : 地球(1 AU) : 火星(1.52 AU) : 木星(5.2 AU)
-// 即比例约为：1 : 1.85 : 2.57 : 3.90 : 13.33
-const orbits_size_ratio_real = {
-  'mercury': 1,
-  'venus': 1.85,
-  'earth': 2.57,
-  'mars': 3.90,
-  'jupiter': 13.33
-}
+const sunRadius = computed(() => {
+  return useRealProportions.value ? 
+    sunInfo.sizeRatioReal * earthBaseRadius.value : sunInfo.sizeRatioAlmost * earthBaseRadius.value;
+})
 
-const planets_size_ratio_real = {
-  'mercury': 1,  // 以水星作为基准
-  'venus': 2.5,
-  'earth': 2.6,
-  'mars': 1.4,
-  'jupiter': 28.6
-}
-
-
-// 由于完全按照真实比例显示，会导致画面无法美观显示，所以使用近似比例
-const orbits_size_ratio_almost = {
-  'mercury': 1,  // 以水星作为基准
-  'venus': 1.85,
-  'earth': 2.57,
-  'mars': 3.90,
-  'jupiter': 6
-}
-const planets_size_ratio_almost = {
-  'mercury': 1,  // 水星直径约4,879 km，按比例计算
-  'venus': 2.5,  // 金星直径约12,104 km，是水星的2.5倍
-  'earth': 2.6,  // 地球直径约12,756 km，是水星的2.6倍
-  'mars': 1.4,  // 火星直径约6,792 km，约为水星的1.4倍
-  'jupiter': 4  // 木星直径约139,820 km，约水星的28.6倍，但完全按比例会太大，所以缩小显示
-}
-
-// 行星ID映射到真实行星名称
-const planetMapping = {
+// 单元ID映射到真实行星名称
+const unitMapping = {
   'space-exploration': 'mercury',
   'science-lab': 'venus',
   'technology': 'earth',
   'mathematics': 'mars',
   'robotics': 'jupiter'
 }
-
-// 月球数据
-const moonData = {
-  size: 12, // 月球大小，地球的约1/4
-  orbitRadius: 70, // 月球轨道半径
-  orbitSpeed: 2.5, // 月球公转速度，比地球围绕太阳的速度快
-  angle: 0, // 初始角度
-}
-
-// 月球角度 - 单独设置以便可以独立控制月球的轨道运动
-const moonAngle = ref(Math.random() * 360)
-const moonRotation = ref(0)
-
-// 更新月球位置的函数
-function updateMoonPosition() {
-  if (isRotating.value) {
-    // 月球公转
-    moonAngle.value = (moonAngle.value + rotationSpeedMultiplier.value * moonData.orbitSpeed) % 360
-    // 月球自转
-    moonRotation.value = (moonRotation.value + rotationSpeedMultiplier.value * 0.5) % 360
-  }
-}
-
-// 计算月球相对于地球的位置
-function getMoonPosition() {
-  const angle = moonAngle.value * (Math.PI / 180)
-  const x = Math.cos(angle) * moonData.orbitRadius
-  const y = Math.sin(angle) * moonData.orbitRadius
-  return { x, y }
-}
-
-// 在现有的updateClock函数中添加月球位置更新
-// 修改updateClock函数
-function updateClock() {
-  if (isRotating.value) {
-    // 更新行星位置
-    Object.keys(orbitAngles).forEach(planetId => {
-      // 不同行星有不同的轨道速度
-      const speedFactor = {
-        'space-exploration': 4.1, // 水星
-        'science-lab': 1.7,      // 金星
-        'technology': 1,         // 地球
-        'mathematics': 0.52,     // 火星
-        'robotics': 0.1,         // 木星
-      }[planetId] || 1
-      
-      // 更新轨道角度
-      orbitAngles[planetId] = (orbitAngles[planetId] + rotationSpeedMultiplier.value * speedFactor * 0.5) % 360
-      
-      // 更新行星自转
-      rotationAngles[planetId] = (rotationAngles[planetId] + rotationSpeedMultiplier.value * 0.5) % 360
-    });
-    
-    // 更新月球位置
-    updateMoonPosition()
-  }
-  
-  // 请求下一帧动画
-  requestAnimationFrame(updateClock);
-}
-
-// 计算轨道基准大小
-const orbitRadiusBaseSize = computed(() => {
-  return sunSize.value.width / 2 + 60; // 基础值，之后会根据实际窗口大小调整
-});
-
-// 行星直径基准大小
-const planetBaseSizeReal = 1;
-const planetBaseSizeAlmost = 45;
-const planetBaseSize = computed(() => {
-  return useRealProportions.value ? planetBaseSizeReal : planetBaseSizeAlmost;
-})
+// 行星ID映射到单元ID
+// const planetMapping = {}
+// Object.entries(unitMapping).forEach(([unitId, planetId]) => {
+//   unitMapping[planetId] = unitId;
+// })
 
 // 动态计算行星数据
 const planets = computed(() => {
   const result = {};
-  // 由于已经在computed中，所以不需要再watch
-  const orbitsRatio = useRealProportions.value ? orbits_size_ratio_real : orbits_size_ratio_almost;
-  const planetsRatio = useRealProportions.value ? planets_size_ratio_real : planets_size_ratio_almost;
-  
-  Object.keys(planetMapping).forEach(unitId => {
-    const planetKey = planetMapping[unitId];
-    result[unitId] = {
-      name: planetInfo[planetKey].name,
-      color: planetInfo[planetKey].color,
-      orbit: orbitRadiusBaseSize.value * orbitsRatio[planetKey],  // 半径
-      size: planetBaseSize.value * planetsRatio[planetKey]  // 直径
+  Object.keys(planetInfo).forEach(planetId => {
+    const orbitRatio = useRealProportions.value ? planetInfo[planetId].orbitRatioReal : planetInfo[planetId].orbitRatioAlmost;
+    const sizeRatio = useRealProportions.value ? planetInfo[planetId].sizeRatioReal : planetInfo[planetId].sizeRatioAlmost;
+    result[planetId] = {
+      name: planetInfo[planetId].name,
+      color: planetInfo[planetId].color,
+      orbit: earthBaseOrbit.value * orbitRatio,  // 半径
+      size: earthBaseRadius.value * sizeRatio  // 直径
     };
   });
   
@@ -363,63 +328,36 @@ const scaledSize = computed(() => {
 });
 
 
-// 行星的公转角度
+// ------------------------------ 角度 & 速度 ------------------------------
+// 行星的公转角
 // 初始角度，确保它们不会重叠
-const orbitAngles = ref({
-  'space-exploration': 340,  // 水星
-  'science-lab': 72,        // 金星
-  'technology': 144,       // 地球
-  'mathematics': 216,      // 火星
-  'robotics': 320          // 木星
-});
+const orbitAngles = ref({});
 
-// 行星的自转角度
+// 初始化所有天体的角度，在onMounted中调用
+function initOrbitAngles() {
+  const angles = {}
+  
+  // 先为所有行星设置随机初始角度
+  Object.keys(planetInfo).forEach(planetId => {
+    // 对每个天体初始化公转角度和自转角度
+    angles[planetId] = {
+      orbit: parseInt(Math.random() * 360),  // 公转角度，0-360度随机值
+    }
+  })
+  
+  orbitAngles.value = angles
+}
+
+// 行星的自转角
 const rotationAngles = ref({
-  'space-exploration': 0, // 水星
-  'science-lab': 0,       // 金星
-  'technology': 0,        // 地球
-  'mathematics': 0,       // 火星
-  'robotics': 0           // 木星
+  'mercury': 0, // 水星
+  'venus': 0,   // 金星
+  'earth': 0,   // 地球
+  'mars': 0,    // 火星
+  'jupiter': 0  // 木星
 });
 
-// 行星公转和自转的相对速度（根据真实太阳系数据设置）
-// 公转周期：水星88天，金星225天，地球365天，火星687天，木星4333天
-// 换算成相对速度比：木星:火星:地球:金星:水星 = 1:6.3:11.9:19.3:49.2
-const orbitSpeeds = {
-  'space-exploration': 0.492, // 水星
-  'science-lab': 0.193,       // 金星
-  'technology': 0.119,        // 地球
-  'mathematics': 0.063,       // 火星
-  'robotics': 0.01            // 木星
-};
-
-// 自转周期：水星58.6天，金星243天（逆转），地球1天，火星1.03天，木星0.41天
-// 换算成相对速度比：木星:火星:地球:金星:水星 = 2.44:0.97:1:-0.004:0.017
-const rotationSpeeds = {
-  // 'space-exploration': 0.017,  // 水星
-  'space-exploration': 0.1,  // 水星
-  // 'science-lab': -0.004,       // 金星（负数表示逆转）
-  'science-lab': -0.05,       // 金星（负数表示逆转）
-  'technology': 1,             // 地球
-  'mathematics': 0.97,         // 火星
-  'robotics': 2.44             // 木星
-};
-
-// 控制旋转的函数
-let animationFrameId = null;
-
-// 添加行星真实图标映射
-const planetIcons = {
-  'space-exploration': mercuryImg, // 水星
-  'science-lab': venusImg,         // 金星
-  'technology': earthImg,          // 地球
-  'mathematics': marsImg,          // 火星
-  'robotics': jupiterImg           // 木星
-};
-
-// 添加每个行星原始图标的引用
-const originalIcons = {};
-
+// 恢复到0度应该自转多少角度，根据轨道角度计算，直接加90度即可
 function getRotationAngle(){
   Object.keys(orbitAngles.value).forEach(planetId => {
     const orbitAngle = orbitAngles.value[planetId];
@@ -428,20 +366,21 @@ function getRotationAngle(){
   });
 }
 
+
 function toggleRotation() {
   isRotating.value = !isRotating.value;
   
   if (isRotating.value) {
     // 开启旋转
     // 保存原始图标
-    units.value.forEach(unit => {
-      originalIcons[unit.id] = unit.icon;
-    });
+    // units.value.forEach(unit => {
+    //   originalIcons[unit.id] = unit.icon;
+    // });
     
     // 替换为行星图标
-    units.value.forEach(unit => {
-      unit.icon = planetIcons[unit.id];
-    });
+    // units.value.forEach(unit => {
+    //   unit.icon = planetIcons[unit.id];
+    // });
     
     // 重置速度到默认值
     resetSpeed();
@@ -456,17 +395,18 @@ function toggleRotation() {
   } else {
     // 停止旋转前记录当前速度，用于平滑停止
     const currentSpeeds = {};
-    Object.keys(orbitSpeeds).forEach(planetId => {
-      currentSpeeds[planetId] = orbitSpeeds[planetId] * rotationSpeedMultiplier.value;
+    const step = 1;
+    Object.keys(planetInfo).forEach(planetId => {
+      currentSpeeds[planetId] = step * planetInfo[planetId].orbitSpeed * rotationSpeedMultiplier.value;
     });
     
     // 平滑停止旋转，传递当前速度
     smoothStopRotation(currentSpeeds);
     
     // 恢复原始图标
-    units.value.forEach(unit => {
-      unit.icon = originalIcons[unit.id];
-    });
+    // units.value.forEach(unit => {
+    //   unit.icon = originalIcons[unit.id];
+    // });
     
     togglePlanetNames();
   }
@@ -493,8 +433,7 @@ function startRotation() {
     // console.log('animate');
     // 更新行星公转角度，应用速度倍率
     Object.keys(orbitAngles.value).forEach(planetId => {
-      // 使用模运算限制角度值增长，防止数值过大导致性能问题
-      orbitAngles.value[planetId] = (orbitAngles.value[planetId] + orbitSpeeds[planetId] * rotationSpeedMultiplier.value);
+      orbitAngles.value[planetId] += rotationAngleSpeeds[planetId] * rotationSpeedMultiplier.value;
     });
     
     // 更新行星自转角度，应用速度倍率
@@ -792,254 +731,24 @@ watchEffect(async () => {
 });
 
 
-
-// const cardPosition = computed(() => cardPosition.value);
-
-
-
-// 信息卡片显示位置
-// let cardPosition = computed(() => {
-//   // 触发重新计算
-//   updateCardPosition.value
-
-//   if (hoveredUnit.value) {
-//     // const position = getCardPosition(hoveredUnit.value.id)
-//     // 行星相对于视口的位置
-//     const planetPos = await getPlanetPosition(hoveredUnit.value.id)
-//     console.log('getCardPosition', planetPos.x + 80*scale.value, planetPos.y);
-
-//     return {
-//       left: planetPos.x + 'px',
-//       top: planetPos.y + 'px'
-//     }
-//     // 设置偏移
-//     // position.left += 80
-
-//     return {
-//       left: position.left + 'px',
-//       top: position.top + 'px'
-//     }
-//   }
-//   return {
-//     left: "50px",
-//     top: "50px"
-//   }
-// })
-
-// 计算信息卡片显示位置，避免超出可视区域
-function getCardPosition(unitId) {
-  const angle = orbitAngles.value[unitId]
-  
-  // 只对当前悬浮的行星执行详细计算和输出日志
-  if (hoveredUnit.value && hoveredUnit.value.id === unitId) {
-    // console.log('getCardPosition', angle, unitId);
-    // console.log('getCardPosition');
-    
-    // 标准坐标系：0°是水平向右，90°是垂直向下，180°是水平向左，270°是垂直向上
-    
-    // 左右侧判断
-    // 角度在90°-270°之间的是左半部分，其余是右半部分
-    let isLeftSide = angle > 90 && angle < 270
-    
-    // 上下侧判断
-    // 角度在0°-180°之间的是下半部分，其余是上半部分
-    let isBottomHalf = angle >= 0 && angle <= 180
-    
-    // 默认坐标位置
-    let topPosition = 0;
-    let leftPosition = 0;
-    
-    // 如果提供了unitId，则进行边界检查
-    if (unitId && solarSystemContainer.value) {
-      try {
-        // 行星相对于视口的位置
-        const planetPos = getPlanetPosition(unitId)
-        console.log('getCardPosition', planetPos.x, planetPos.y);
-
-        return {
-          left: planetPos.x,
-          top: planetPos.y
-        }
-
-        // 获取当前视口大小
-        const viewportWidth = solarSystemContainer.value.clientWidth
-        const viewportHeight = solarSystemContainer.value.clientHeight
-        
-        // 获取太阳系中心位置
-        const centerX = viewportWidth / 2
-        const centerY = viewportHeight / 2
-        
-        // 计算行星相对于视口的位置（考虑缩放）
-        const planetX = centerX + planetPos.x * scale.value
-        const planetY = centerY + planetPos.y * scale.value
-        
-        // 安全检查窗口对象是否存在（防止SSR错误）
-        const isBrowser = typeof window !== 'undefined'
-        
-        // 计算信息卡片的宽高 (根据视口大小调整)
-        let cardWidth = 280
-        let cardHeight = 250
-        
-        // 根据媒体查询调整卡片尺寸
-        if (isBrowser) {
-          if (window.innerWidth <= 768) {
-            cardWidth = 180
-            cardHeight = 220
-          } else if (window.innerWidth <= 1300) {
-            cardWidth = 220
-            cardHeight = 230
-          }
-        }
-        
-        // 考虑缩放因素对卡片位置的影响
-        const offset = isBrowser && window.innerWidth <= 768 ? 40 : 70
-        
-        // 计算具体的位置坐标
-        if (isLeftSide) {
-          // 左侧行星，卡片放在右侧
-          leftPosition = planetX - offset - cardWidth;
-        } else {
-          // 右侧行星，卡片放在右侧
-          leftPosition = planetX + offset;
-        }
-        
-        if (isBottomHalf) {
-          // 下半部分行星，卡片放在上方
-          topPosition = planetY - offset - cardHeight;
-        } else {
-          // 上半部分行星，卡片放在下方
-          topPosition = planetY + offset;
-        }
-        
-        // 计算卡片在不同位置的边界情况
-        const leftCardRight = planetX - offset // 左侧卡片的右边缘
-        const leftCardLeft = leftCardRight - cardWidth // 左侧卡片的左边缘
-        
-        const rightCardLeft = planetX + offset // 右侧卡片的左边缘
-        const rightCardRight = rightCardLeft + cardWidth // 右侧卡片的右边缘
-        
-        const topCardBottom = planetY - offset // 上方卡片的底边缘
-        const topCardTop = topCardBottom - cardHeight // 上方卡片的上边缘
-        
-        const bottomCardTop = planetY + offset // 下方卡片的上边缘
-        const bottomCardBottom = bottomCardTop + cardHeight // 下方卡片的底边缘
-        
-        // 检查是否超出视口边界
-        const outOfLeft = leftCardLeft < 0
-        const outOfRight = rightCardRight > viewportWidth
-        const outOfTop = topCardTop < 0
-        const outOfBottom = bottomCardBottom > viewportHeight
-        
-        // 根据边界情况调整卡片位置
-        // 如果左侧和右侧都会超出，选择超出较少的一侧
-        if (outOfLeft && outOfRight) {
-          isLeftSide = (leftCardLeft * -1) < (rightCardRight - viewportWidth) ? false : true
-          // 重新计算左侧位置
-          if (isLeftSide) {
-            leftPosition = planetX - offset - cardWidth;
-          } else {
-            leftPosition = planetX + offset;
-          }
-        } else if (outOfLeft) {
-          isLeftSide = false // 左侧超出，放右侧
-          leftPosition = planetX + offset;
-        } else if (outOfRight) {
-          isLeftSide = true // 右侧超出，放左侧
-          leftPosition = planetX - offset - cardWidth;
-        }
-        
-        // 如果上方和下方都会超出，选择超出较少的一侧
-        if (outOfTop && outOfBottom) {
-          isBottomHalf = (topCardTop * -1) < (bottomCardBottom - viewportHeight) ? false : true
-          // 重新计算顶部位置
-          if (isBottomHalf) {
-            topPosition = planetY - offset - cardHeight;
-          } else {
-            topPosition = planetY + offset;
-          }
-        } else if (outOfTop) {
-          isBottomHalf = false // 上方超出，放下方
-          topPosition = planetY + offset;
-        } else if (outOfBottom) {
-          isBottomHalf = true // 下方超出，放上方
-          topPosition = planetY - offset - cardHeight;
-        }
-        
-        // 如果极端情况下四个方向都会超出，选择最合适的方向
-        if ((outOfLeft || outOfRight) && (outOfTop || outOfBottom)) {
-          // 计算四个方向的可用空间
-          const leftSpace = leftCardLeft < 0 ? 0 : leftCardLeft
-          const rightSpace = rightCardRight > viewportWidth ? 0 : viewportWidth - rightCardRight
-          const topSpace = topCardTop < 0 ? 0 : topCardTop
-          const bottomSpace = bottomCardBottom > viewportHeight ? 0 : viewportHeight - bottomCardBottom
-          
-          // 选择水平方向空间最大的一侧
-          isLeftSide = leftSpace > rightSpace
-          if (isLeftSide) {
-            leftPosition = planetX - offset - cardWidth;
-          } else {
-            leftPosition = planetX + offset;
-          }
-          
-          // 选择垂直方向空间最大的一侧
-          isBottomHalf = topSpace > bottomSpace
-          if (isBottomHalf) {
-            topPosition = planetY - offset - cardHeight;
-          } else {
-            topPosition = planetY + offset;
-          }
-        }
-        
-        // 最终边界检查，确保不会出界
-        leftPosition = Math.max(10, Math.min(viewportWidth - cardWidth - 10, leftPosition));
-        topPosition = Math.max(10, Math.min(viewportHeight - cardHeight - 10, topPosition));
-        
-      } catch (error) {
-        console.error('计算信息卡片位置时出错:', error)
-        // 出错时使用默认位置
-      }
-    }
-    
-    return {
-      leftSide: isLeftSide,
-      bottomHalf: isBottomHalf,
-      left: leftPosition + 'px',
-      top: topPosition + 'px'
-    }
-  } else {
-    // 对于非悬浮行星，直接返回基础位置，避免不必要的计算
-    // 角度在90°-270°之间的是左半部分，其余是右半部分
-    const isLeftSide = angle > 90 && angle < 270
-    // 角度在0°-180°之间的是下半部分，其余是上半部分
-    const isBottomHalf = angle >= 0 && angle <= 180
-    
-    return {
-      leftSide: isLeftSide,
-      bottomHalf: isBottomHalf,
-      left: '0px',
-      top: '0px'
-    }
-  }
-}
-
-
 // 行星相对于视口的位置（x, y坐标）
-async function getPlanetPosition(unitId) {
-  // 获取太阳系中心位置
-  const sunPosition = await getSolarPosition()
+async function getPlanetPosition(planetId) {
+  if (planetId === 'sun') {
+    // 获取太阳系中心位置
+    const sunPosition = await getSolarPosition()
+    return sunPosition
+  }
 
-  const offset = getPlanetSolarOffset(unitId)
-  
-  // 计算x和y的偏移（相对于太阳系中心）
-  const x_offset = offset.x * scale.value
-  const y_offset = offset.y * scale.value
-  // console.log('行星相对太阳的偏移', x_offset, y_offset)
+  const basePlanetId = planetInfo[planetId]['base']
+  const basePosition = await getPlanetPosition(basePlanetId)
+
+  // 计算x和y的偏移（相对于父行星中心）
+  const offset = getPlanetOffset(planetId)
+  // console.log('行星相对父行星的偏移', basePlanetId, x_offset, y_offset)
 
   // 计算行星相对于视口的位置
-  // const x = sunPosition.x + x_offset
-  // const y = sunPosition.y + y_offset
-  const x = sunPosition.x + x_offset
-  const y = sunPosition.y + y_offset
+  const x = basePosition.x + offset.x
+  const y = basePosition.y + offset.y
   // console.log('x_offset', x_offset, 'y_offset', y_offset)
   // console.log('x_offset', x_offset * scale.value, 'y_offset', y_offset * scale.value)
   // console.log('行星相对于视口的偏移', x, y)
@@ -1052,16 +761,17 @@ async function getPlanetPosition(unitId) {
 
 
 // 行星相对于太阳系中心的位置（x, y坐标）
-function getPlanetSolarOffset(unitId) {
-  // 如果旋转模式开启，使用动态角度；否则使用静态角度
-  const angle = orbitAngles.value[unitId];
-  const radius = planets.value[unitId].orbit;
+function getPlanetOffset(planetId) {
+  const angle = orbitAngles.value[planetId];
+  const radius = planets.value[planetId].orbit;
   // 将角度转换为弧度，使用模运算确保在0-360度范围内
   const radians = ((angle % 360) * Math.PI) / 180;
   
-  // 计算x和y的偏移（相对于太阳系中心） 轨道位置是固定的，不会缩放，所以这里也无需乘 scale.value
   const x = Math.cos(radians) * radius;
   const y = Math.sin(radians) * radius;
+
+  x *= scale.value
+  y *= scale.value
   
   return { 
     x, 
@@ -1072,23 +782,6 @@ function getPlanetSolarOffset(unitId) {
 // 太阳系中心相对于视口的位置（x, y坐标）
 function getSolarPosition() {
   if (!solarSystemContainer.value) return { x: 0, y: 0 };
-
-  // nextTick(() => {
-  //   const sunRect = sun.value.getBoundingClientRect();
-  //   // console.log('sunRect',sunRect.left, sunRect.top);
-    
-  //   // 计算太阳中心相对于视口的坐标
-  //   // 太阳中心 = 太阳左上角 + 太阳宽度/2
-  //   const sunCenterX = sunRect.left + sunRect.width / 2;
-  //   const sunCenterY = sunRect.top + sunRect.height / 2;
-  //   console.log('太阳相对于视口的坐标',sunCenterX, sunCenterY)
-    
-  // })
-
-  // return {
-  //     x: sunCenterX,
-  //     y: sunCenterY
-  // }
 
   // 返回一个 Promise
   return new Promise((resolve, reject) => {
@@ -1131,9 +824,6 @@ function getSolarPosition() {
     });
   });
 }
-
-
-
 
 
 // 监听窗口大小变化
@@ -1688,6 +1378,9 @@ onMounted(() => {
   updateWindowSize();
   window.addEventListener('resize', handleResize);
   
+  // 初始化所有天体的角度
+  initOrbitAngles();
+
   // 预加载行星图片
   preloadPlanetImages();
   
@@ -1822,21 +1515,6 @@ function toggleRealProportions() {
   });
 }
 
-// 添加一个变量存储行星图片映射
-const planetImagesMapLocal = {
-  'space-exploration': mercuryImg,
-  'science-lab': venusImg,
-  'technology': earthImg,
-  'mathematics': marsImg,
-  'robotics': jupiterImg
-};
-const planetImagesMap = {
-  'space-exploration': "https://img.timex.fun/blot-english/mercury-pamolal.png",
-  'science-lab': "https://img.timex.fun/blot-english/venus-pala6m3.jpg",
-  'technology': "https://img.timex.fun/blot-english/earth-pamolpz.jpg",
-  'mathematics': "https://img.timex.fun/blot-english/mars-pamolg4.png",
-  'robotics': "https://img.timex.fun/blot-english/jupiter-pamol65.png"
-};
 
 // 预加载的图片缓存
 const preloadedImages = ref({});
@@ -1847,18 +1525,23 @@ function preloadPlanetImages() {
   
   // console.log('开始预加载行星图片...');
   
-  const totalImages = Object.keys(planetImagesMap).length;
+  const totalImages = Object.keys(planetInfo).length;
   let loadedCount = 0;
   
   // 遍历各个单元加载对应图片
-  Object.entries(planetImagesMap).forEach(([unitId, imgSrc]) => {
+  Object.entries(planetInfo).forEach(([planetId, planet]) => {
     // 创建图片对象进行预加载
     const img = new Image();
+    // 仅限于浏览器开启了缓存，没有disable cache
+    // 只是让图片提前下载一次，这样浏览器开启缓存后就会使用缓存，而不会重新下载，但如果浏览器关闭了缓存，则每次依然会重新下载图片
+    img.src = planet.img; 
+
+    // 监听图片加载事件
     img.onload = () => {
       // console/.log(`图片加载成功: ${unitId}`);
       loadedCount++;
       // 将加载成功的图片保存到缓存中
-      preloadedImages.value[unitId] = imgSrc;
+      preloadedImages.value[planetId] = planet.img;
       
       if (loadedCount >= totalImages) {
         allImagesLoaded.value = true;
@@ -1872,16 +1555,14 @@ function preloadPlanetImages() {
       }
       allImagesLoaded.value = false;
     };
-    // 仅限于浏览器开启了缓存，没有disable cache
-    // 只是让图片提前下载一次，这样浏览器开启缓存后就会使用缓存，而不会重新下载，但如果浏览器关闭了缓存，则每次依然会重新下载图片
-    img.src = imgSrc;  
+     
   });
 }
 
 // 获取行星图片的函数
-function getPlanetImage(unitId) {
+function getPlanetImage(planetId) {
   // console.log('getPlanetImage', unitId, preloadedImages.value[unitId]);
-  return preloadedImages.value[unitId] || '';
+  return preloadedImages.value[planetId] || '';
 }
 
 </script>
@@ -1907,8 +1588,8 @@ function getPlanetImage(unitId) {
           class="sun" 
           ref="sun"
           :style="{
-            width: `${sunSize.width}px`,
-            height: `${sunSize.height}px`,
+            width: `${sunRadius}px`,
+            height: `${sunRadius}px`,
           }"
         ></div>
         
@@ -1917,7 +1598,7 @@ function getPlanetImage(unitId) {
           v-for="unit in units"
           :key="`orbit-${unit.id}`"
           class="orbit"
-          :style="{ '--orbit-radius': `${planets[unit.id].orbit}px` }"
+          :style="{ '--orbit-radius': `${planets[unit.planetId].orbit}px` }"
         ></div>
         
         <!-- 行星 -->
@@ -1927,12 +1608,12 @@ function getPlanetImage(unitId) {
           class="planet"
           :class="[getUnitStatus(unit.id), { 'active': hoveredUnit === unit }]"
           :style="{
-            '--orbit-angle': `${orbitAngles[unit.id]}deg`,
-            '--planet-color': planets[unit.id].color,
-            '--planet-size': `${planets[unit.id].size}px`,
-            'transform': `translate(-50%, -50%) rotate(${rotationAngles[unit.id]}deg)`,
-            'left': `calc(50% + ${getPlanetSolarOffset(unit.id).x}px)`,
-            'top': `calc(50% + ${getPlanetSolarOffset(unit.id).y}px)`,
+            '--orbit-angle': `${orbitAngles[unit.planetId]}deg`,
+            '--planet-color': planets[unit.planetId].color,
+            '--planet-size': `${planets[unit.planetId].size}px`,
+            'transform': `translate(-50%, -50%) rotate(${rotationAngles[unit.planetId]}deg)`,
+            'left': `calc(50% + ${getPlanetSolarOffset(unit.planetId).x}px)`,
+            'top': `calc(50% + ${getPlanetSolarOffset(unit.planetId).y}px)`,
             'will-change': isRotating ? 'transform, left, top' : 'auto'
           }"
           @click="handlePlanetClick(unit)"
@@ -1940,16 +1621,16 @@ function getPlanetImage(unitId) {
           @mouseleave="!isMobileDevice && handlePlanetLeave()"
         >
           <!-- 行星图标 - 根据不同情况显示图片或文字 -->
-          <div class="planet-icon" :style="{ 'font-size': `${planets[unit.id].size * 0.4}px` }">
+          <div class="planet-icon" :style="{ 'font-size': `${planets[unit.planetId].size * 0.4}px` }">
             <!-- 当isRotating时显示图片，否则显示原始图标 -->
             <!-- <img :src="unit.icon" class="planet-image" alt="行星" /> -->
-            <img v-show="isRotating" :src="getPlanetImage(unit.id)" class="planet-image" alt="行星" />
+            <img v-show="isRotating" :src="getPlanetImage(unit.planetId)" class="planet-image" alt="行星" />
             <template v-if="!isRotating">{{ unit.icon }}</template>
           </div>
           
           <!-- 为地球添加月球 -->
           <div 
-            v-if="unit.id === 'technology'" 
+            v-if="unit.planetId === 'technology'" 
             class="moon"
             :style="{
               width: `${moonData.size}px`,
@@ -1980,16 +1661,16 @@ function getPlanetImage(unitId) {
           v-show="showPlanetNames"
           class="planet-name"
           :style="{
-            'left': `calc(50% + ${getPlanetSolarOffset(unit.id).x}px)`,
-            'top': `calc(50% + ${getPlanetSolarOffset(unit.id).y}px + ${planets[unit.id].size / 2 + 20}px)`,
+            'left': `calc(50% + ${getPlanetSolarOffset(unit.planetId).x}px)`,
+            'top': `calc(50% + ${getPlanetSolarOffset(unit.planetId).y}px + ${planets[unit.planetId].size / 2 + 20}px)`,
             'transform': 'translateX(-50%)',
             'opacity': showPlanetNames ? '1' : '0',
             'will-change': isRotating ? 'left, top' : 'auto',
-            'font-size': `${Math.max(1, planets[unit.id].size * 0.015)}rem`,
-            '--planet-color': planets[unit.id].color
+            'font-size': `${Math.max(1, planets[unit.planetId].size * 0.015)}rem`,
+            '--planet-color': planets[unit.planetId].color
           }"
         >
-          {{ planets[unit.id].name }}
+          {{ planets[unit.planetId].name }}
         </div>
       </div>
     </div>
